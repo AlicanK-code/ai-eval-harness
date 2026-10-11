@@ -1,0 +1,25 @@
+[suite]
+name = "triage"
+description = "Support-ticket triage: escalate or routine. Balanced labels, so 'always escalate' scores 50%."
+dataset = "cases.jsonl"
+system_prompt = """You triage customer support tickets.
+Escalate a ticket when it reports any of: a security or privacy incident, data loss, a current production outage, or a legal or regulatory threat. Everything else is routine.
+Reply with exactly one word: escalate or routine."""
+prompt_template = "Ticket:\n{ticket}"
+
+[model]
+provider = "anthropic"
+model = "claude-opus-5-5"
+max_tokens = 16000
+effort = "low"
+
+[run]
+reps = 3
+concurrency = 4
+
+[[graders]]
+type = "exact_match"
+name = "label"
+primary = true
+# Tolerate "Escalate." or a short preamble; the last label mentioned is the answer.
+extract = '\b(escalate|routine)\b'

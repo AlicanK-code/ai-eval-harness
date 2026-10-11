@@ -1,0 +1,40 @@
+[suite]
+name = "summarization"
+description = "Two-sentence summaries of synthetic news passages, graded by a rubric-based LLM judge."
+dataset = "cases.jsonl"
+prompt_template = """Summarize the following passage in at most two sentences. Include the key facts and figures, and nothing that isn't in the passage.
+
+Passage:
+{passage}"""
+
+[model]
+provider = "anthropic"
+model = "claude-opus-5-5"
+max_tokens = 16000
+effort = "medium"
+
+[run]
+reps = 2
+concurrency = 4
+
+# The headline metric: three atomic yes/no checks, scored as the fraction met.
+# The judge is a different model from the one under test to avoid self-preference.
+[[graders]]
+type = "llm_judge"
+name = "rubric"
+primary = true
+judge_provider = "anthropic"
+judge_model = "claude-sonnet-5-5"
+judge_effort = "low"
+criteria = [
+  { id = "faithful", description = "Makes no claim that is absent from, or contradicts, the passage in the task." },
+  { id = "key_points", description = "Covers every key point listed in the reference notes (paraphrase is fine)." },
+  { id = "concise", description = "Is at most two sentences long." },
+]
+
+# A cheap, reference-bound similarity score, kept as a secondary signal to show how it
+# diverges from the judge on good paraphrases.
+[[graders]]
+type = "token_f1"
+name = "overlap"
+threshold = 0.4

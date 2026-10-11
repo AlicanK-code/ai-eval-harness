@@ -1,0 +1,29 @@
+[suite]
+name = "arithmetic"
+description = "Multi-step word problems with synthetic numbers, graded on the final numeric answer."
+dataset = "cases.jsonl"
+system_prompt = """Solve the problem. Show brief working, then finish with a final line of the form
+ANSWER: <number>
+using digits only - no units, currency symbols, or thousands separators."""
+prompt_template = "{question}"
+
+[model]
+provider = "anthropic"
+model = "claude-opus-5-5"
+max_tokens = 16000
+effort = "medium"
+
+[run]
+reps = 3
+concurrency = 4
+
+[mock]
+answer_template = "Working through the problem step by step.\nANSWER: {answer}"
+
+[[graders]]
+type = "numeric"
+name = "correct"
+primary = true
+# Only the number on the ANSWER line counts, so numbers in the working can't pass by accident.
+extract = 'ANSWER:\s*([^\n]+)'
+abs_tol = 0.005

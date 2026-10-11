@@ -1,0 +1,32 @@
+[suite]
+name = "extraction"
+description = "Structured extraction from messy customer messages, graded field by field."
+dataset = "cases.jsonl"
+system_prompt = "You extract structured data from customer support messages. Reply with a single JSON object and nothing else."
+prompt_template = """Extract these fields from the customer message:
+- customer_name (string): the person who placed the order
+- order_id (string or null): the final, correct order id if one is given
+- amount (number or null): the order or charge amount being discussed, as a plain number
+- currency (string or null): ISO 4217 code, such as USD, EUR, GBP or JPY
+- wants_refund (boolean): true only if the customer is currently asking for money back
+
+Message:
+{message}"""
+
+[model]
+provider = "anthropic"
+model = "claude-opus-5-5"
+max_tokens = 16000
+effort = "medium"
+
+[run]
+reps = 3
+concurrency = 4
+
+[mock]
+answer_template = "```json\n{answer}\n```"
+
+[[graders]]
+type = "json_match"
+name = "fields"
+primary = true

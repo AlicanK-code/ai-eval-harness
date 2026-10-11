@@ -1,0 +1,16 @@
+{"id": "ar-001", "input": {"question": "A bookstore marks up a $48 book by 25%, then runs a 20%-off sale on the new price. What is the sale price in dollars?"}, "reference": 48, "tags": ["percent"]}
+{"id": "ar-002", "input": {"question": "Pump A fills a 540-litre tank in 9 hours and pump B fills it in 18 hours. Working together from empty, how many hours do they take to fill it?"}, "reference": 6, "tags": ["rates"]}
+{"id": "ar-003", "input": {"question": "Mira buys 7 notebooks at $3.40 each and 3 pens at $1.85 each, and pays with a $50 bill. How much change does she get, in dollars?"}, "reference": 20.65, "tags": ["multi-step"]}
+{"id": "ar-004", "input": {"question": "A train leaves at 08:45 and travels 273 km at an average speed of 78 km/h. At what time does it arrive? Give the arrival time as the number of minutes after midnight."}, "reference": 735, "tags": ["multi-step"]}
+{"id": "ar-005", "input": {"question": "A town's population was 18,400. It grew by 5% in the first year and shrank by 5% in the second year. What is the population after the second year?"}, "reference": 18354, "tags": ["percent"]}
+{"id": "ar-006", "input": {"question": "A warehouse holds 14 pallets of 36 boxes each and 9 pallets of 52 boxes each. Then 117 boxes are shipped out. How many boxes remain?"}, "reference": 855, "tags": ["arithmetic"]}
+{"id": "ar-007", "input": {"question": "Kofi cycles 18 km at 12 km/h, then rides the same 18 km back at 18 km/h. What is his average speed for the whole trip, in km/h?"}, "reference": 14.4, "tags": ["rates"]}
+{"id": "ar-008", "input": {"question": "Three friends split a $126 restaurant bill plus an 18% tip equally. How much does each person pay, in dollars?"}, "reference": 49.56, "tags": ["multi-step"]}
+{"id": "ar-009", "input": {"question": "What is the sum of all multiples of 7 between 100 and 200?"}, "reference": 2107, "tags": ["arithmetic"]}
+{"id": "ar-010", "input": {"question": "A phone costs $640 after a 20% discount. What was its original price, in dollars?"}, "reference": 800, "tags": ["percent"]}
+{"id": "ar-011", "input": {"question": "A printer prints 42 pages per minute. A second printer is 50% slower. Working together, how many minutes do they need to print 1,890 pages?"}, "reference": 30, "tags": ["rates"]}
+{"id": "ar-012", "input": {"question": "Lena saves $35 in week 1, and each week she saves $6 more than the week before. How much has she saved in total after 10 weeks, in dollars?"}, "reference": 620, "tags": ["multi-step"]}
+{"id": "ar-013", "input": {"question": "A rectangular garden measures 23 m by 17 m. A path 2 m wide runs around the outside of it. What is the area of the path, in square metres?"}, "reference": 176, "tags": ["arithmetic"]}
+{"id": "ar-014", "input": {"question": "A recipe for 4 people uses 300 g of rice. Ines is cooking for 14 people, and rice is only sold in 500 g bags. How many bags must she buy?"}, "reference": 3, "tags": ["multi-step"]}
+{"id": "ar-015", "input": {"question": "A savings account pays 4% interest, compounded yearly. If $2,500 is deposited, how much is in the account after 2 years, in dollars?"}, "reference": 2704, "tags": ["percent"]}
+{"id": "ar-016", "input": {"question": "Two cars start 390 km apart and drive toward each other at 70 km/h and 60 km/h. After how many hours do they meet?"}, "reference": 3, "tags": ["rates"]}

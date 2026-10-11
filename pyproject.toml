@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "evalharness"
+version = "0.1.0"
+description = "A small, honest evaluation harness for LLM applications."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = ["anthropic>=0.97"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+evalh = "evalharness.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["evalharness*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

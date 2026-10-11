@@ -1,0 +1,31 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ".[dev]"
+      - name: Unit tests
+        run: pytest -q
+      - name: Validate bundled suites (oracle passes, null fails)
+        run: evalh validate suites/*
+      - name: End-to-end mock run and comparison
+        run: |
+          evalh run suites/triage --provider mock --model mock-weak --out runs/weak
+          evalh run suites/triage --provider mock --model mock-strong --out runs/strong
+          evalh compare runs/weak runs/strong --html runs/compare.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: runs/

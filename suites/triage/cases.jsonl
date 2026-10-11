@@ -1,0 +1,14 @@
+{"id": "tr-001", "input": {"ticket": "Our whole team has been unable to log in since 9am - every request returns a 503."}, "reference": "escalate", "tags": ["escalate", "outage"]}
+{"id": "tr-002", "input": {"ticket": "How do I change the colour of the dashboard header?"}, "reference": "routine", "tags": ["routine", "how-to"]}
+{"id": "tr-003", "input": {"ticket": "I think someone else signed in to my account from another country. I can see sessions I don't recognise."}, "reference": "escalate", "tags": ["escalate", "security"]}
+{"id": "tr-004", "input": {"ticket": "Could you add dark mode to the mobile app?"}, "reference": "routine", "tags": ["routine", "feature-request"]}
+{"id": "tr-005", "input": {"ticket": "After yesterday's sync, three months of project notes are gone from our workspace."}, "reference": "escalate", "tags": ["escalate", "data-loss"]}
+{"id": "tr-006", "input": {"ticket": "My invoice shows the wrong company address. Can you fix it?"}, "reference": "routine", "tags": ["routine", "billing"]}
+{"id": "tr-007", "input": {"ticket": "If this isn't resolved by Friday, our lawyers will be in touch about your breach of our SLA."}, "reference": "escalate", "tags": ["escalate", "legal"]}
+{"id": "tr-008", "input": {"ticket": "The export button is a bit slow for large reports - it takes about 20 seconds."}, "reference": "routine", "tags": ["routine", "performance"]}
+{"id": "tr-009", "input": {"ticket": "We accidentally shared a public link to a folder containing customer social security numbers. How do we revoke it right now?"}, "reference": "escalate", "tags": ["escalate", "security"]}
+{"id": "tr-010", "input": {"ticket": "Is there a student discount?"}, "reference": "routine", "tags": ["routine", "billing"]}
+{"id": "tr-011", "input": {"ticket": "The API is returning 500 errors for every write request across our production environment."}, "reference": "escalate", "tags": ["escalate", "outage"]}
+{"id": "tr-012", "input": {"ticket": "I forgot my password and the reset email went to spam. All sorted now, just letting you know."}, "reference": "routine", "tags": ["routine", "account"]}
+{"id": "tr-013", "input": {"ticket": "Can you confirm whether you're GDPR compliant? Our procurement team needs a document for their records."}, "reference": "routine", "tags": ["routine", "compliance-question"]}
+{"id": "tr-014", "input": {"ticket": "A ransomware note just appeared in the shared drive that syncs with your app, and our files have been renamed."}, "reference": "escalate", "tags": ["escalate", "security"]}
