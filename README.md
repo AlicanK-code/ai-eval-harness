@@ -4,7 +4,7 @@ A small evaluation harness for LLM applications that is careful about what its n
 
 You write test cases and a grading rule. It runs a model on every case several times, then scores each output. It reports a mean with a confidence interval, plus cost and latency. It can also tell you whether a change between two runs is real or just noise.
 
-**New to evals?** Read the [plain-language overview](https://alicank-code.github.io/github-portfolio/eval-harness.html). It explains what the harness does with no code or statistics, and shows what it found when comparing Claude Haiku 5.5, Sonnet 5.5 and Opus 5.5 on 110 science and research questions.
+**New to evals?** Read the [plain-language overview](https://alicank-code.github.io/github-portfolio/eval-harness.html). It explains what the harness does with no code or statistics, and walks through the [results](#results) below.
 
 ```
 $ evalh run suites/arithmetic --provider mock --model mock-strong
@@ -26,6 +26,42 @@ improved: tr-001, tr-004, tr-007, tr-011
 ```
 
 Each run also writes a self-contained `report.html`. It has summary cards, a per-tag breakdown, and a filterable table of cases. You can expand any case to see the prompt, every rep's output, and the grader's reasoning.
+
+## Results
+
+### Comparing three Claude models
+
+On the `stem-research` suite: 108 scored questions from seven public benchmarks, 3 tries each, at medium effort.
+
+| Model | Score | If refusals count as wrong | Cost of the run |
+|---|---|---|---|
+| Claude Haiku 5.5 | 88.0% | 88.0% | $0.21 |
+| Claude Sonnet 5.5 | 91.0% | 91.0% | $2.04 |
+| Claude Opus 5.5 | 93.9% | 90.4% | $4.74 |
+
+- **The ranking is mostly within noise.** Only Opus vs Haiku is significant on the questions both answered: +4.8 pts, paired 95% CI [+1.3, +9.3].
+- **Refusals flip the ranking.** Opus declined four legitimate biology exam questions on every try; the other models answered them. Count refusals as wrong and Opus drops below Sonnet.
+- **Haiku is the value pick.** It scored within a few points of Opus at about a twentieth of the cost.
+
+### Can a better prompt help? (`experiments/prompt-tuning/`)
+
+Claude Haiku 5.5 on the `stem-hard` suite: 150 hard and frontier questions, with a third used for tuning and two thirds held out. Scores below are on the held-out test set (90 questions after exclusions).
+
+| Change | Effect on test | Notes |
+|---|---|---|
+| A system-prompt rule targeting an observed failure habit | −0.4 pts [−2.6, +1.9] | No effect. The habit barely changed. |
+| High effort instead of medium | +1.5 pts [−1.1, +4.4] | Not significant, and 71% more cost. |
+| Fixing the grading (judge bug and faulty answer keys) | 68.0% → 74.8% | Bigger than every tuning change combined. |
+
+**Why the prompt couldn't help:** of the 20 tuning questions Haiku failed, only 1 showed a habit a prompt could change. 6 were knowledge gaps, 5 were run-to-run luck, and 8 were problems with the test itself. The full write-up is in [`experiments/prompt-tuning/`](experiments/prompt-tuning/results.md).
+
+### Errors found in public benchmarks
+
+Reading the questions that every model failed on every try turned up wrong answer keys. Four were confirmed with independent computation:
+- three in Humanity's Last Exam: a re-run algorithm, a physics simulation and an exact rational computation;
+- one in GPQA Diamond: the standard notation, applied to the question's own values.
+
+All four were reported to the maintainers on 12 October 2026. The question text isn't reproduced here, at the datasets' request.
 
 ## Why this exists
 
@@ -61,17 +97,27 @@ pytest
 
 Mock models: `mock-oracle` (always right), `mock-null` (always empty), `mock-strong`, `mock-weak`.
 
+| Command | What it does |
+|---|---|
+| `evalh validate` | Dataset and grader health checks; no model calls |
+| `evalh fetch` | Builds a suite's questions from public benchmarks (see its `mix.toml`) |
+| `evalh run` | Runs a suite: `--model`, `--effort`, `--reps`, `--system-prompt FILE`, `--limit`, `--per-group`, `--resume` |
+| `evalh regrade` | Re-marks a run's saved answers with the current graders, without calling the model again |
+| `evalh report` | Rebuilds `summary.json` and `report.html` for a run |
+| `evalh compare` | Paired comparison of two runs, overall and per train/test split |
+
 ### Running against Claude
 
+Put your key in a `.env` file in the project folder (`ANTHROPIC_API_KEY=sk-ant-...`). It's git-ignored and loaded automatically; an exported environment variable works too.
+
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
 evalh run suites/arithmetic --limit 3 --reps 1      # smoke test first: 3 calls
 evalh run suites/arithmetic                          # full run: 16 cases x 3 reps
 evalh run suites/arithmetic --effort high            # same suite, different effort
 evalh compare runs/<first> runs/<second>
 ```
 
-The suites default to `claude-opus-5-5` at `medium` effort. The summarization judge uses `claude-sonnet-5-5`, a different model, to avoid self-preference bias. Override with `--model` and `--effort`. If a run is interrupted, or some attempts error out, `evalh run --resume runs/<dir>` picks up where it stopped.
+Most suites default to `claude-opus-5-5` at `medium` effort (`stem-hard` defaults to `claude-haiku-5-5`). The summarization judge uses `claude-sonnet-5-5`, a different model, to avoid self-preference bias. Override with `--model` and `--effort`. If a run is interrupted, or some attempts error out, `evalh run --resume runs/<dir>` picks up where it stopped.
 
 ## Bundled suites
 
@@ -82,6 +128,7 @@ The suites default to `claude-opus-5-5` at `medium` effort. The summarization ju
 | `triage` | 14 tickets → `escalate` / `routine` | `exact_match` with label extraction | Balanced 7/7, so "always escalate" scores 50%. The first tag is the label, so the per-tag view gives per-class recall |
 | `summarization` | 6 synthetic news passages | `llm_judge` (3 atomic criteria) + `token_f1` | Shows how a judge and word overlap disagree on good paraphrases |
 | `stem-research` | 110 questions from 7 public benchmarks, from grade-school science to frontier research | `answer_match`: letter, label or number checked exactly; free-text answers by an LLM judge | Built on demand with `evalh fetch` (see below). Tagged by difficulty tier and source |
+| `stem-hard` | 150 hard and frontier questions (GPQA, MATH-500, QASPER, HLE) | `answer_match` | Fixed train/test split, for tuning prompts without overfitting. Built with `evalh fetch` |
 
 ## Public benchmarks: the `stem-research` suite
 
@@ -112,8 +159,24 @@ A few choices worth knowing about:
 - **Mixed answer formats, one score.** Each question records how its answer is checked: an option letter, a fixed label, a number, or free text. Only free text goes to the LLM judge, which sees the question and the final answer, not the model's reasoning.
 - **Only the final `ANSWER:` line is graded,** so a letter or number in the working can't pass by accident. A response without one is recorded as unanswered.
 - **Ambiguous questions are dropped at build time.** QASPER questions where the human annotators disagreed (one says the paper answers it, another says it doesn't) have no fair reference answer, so they're skipped.
-- **Faulty answer keys are excluded, not hidden.** Cases listed in a suite's `known_issues.toml` (a wrong or ambiguous key) are left out of every score, but each report lists them with the reason and the run's answers. Two are listed for `stem-research`, both found because every model "failed" them on every try.
+- **Faulty answer keys are excluded, not hidden.** Cases listed in a suite's `known_issues.toml` (a wrong key, or a question that can't be answered as written) are left out of every score, but each report lists them with the reason and the run's answers. An entry with `exclude = false` records a case that was reviewed and kept. Only high-confidence findings are excluded, and each entry says whether it was verified independently or rests on reasoning alone.
 - **Public benchmarks may be in training data.** High scores on the easier tiers partly measure memory. GPQA and HLE were designed to resist this, and the handwritten suites in this repository can't have been seen at all.
+
+## Tuning a prompt against the eval
+
+`stem-hard` is set up for improving a model's setup without fooling yourself:
+
+- **A fixed train/test split.** `[split] train_fraction` in `mix.toml` gives every case a third tag, `train` or `test`, assigned once at random within each source. Read only the train answers when proposing a change, and report the test score.
+- **`--system-prompt FILE`** runs a suite with a different prompt without editing it. The file path is recorded in the run.
+- **`evalh compare`** reports the paired difference overall and separately for train and test.
+- **`evalh regrade`** re-marks saved answers after a grader fix. Every earlier round can be corrected the same way without rerunning the model, and the previous results file is kept.
+
+```bash
+evalh fetch suites/stem-hard
+evalh run suites/stem-hard --system-prompt prompts/v0.txt --out runs/v0
+evalh run suites/stem-hard --system-prompt prompts/v1.txt --out runs/v1
+evalh compare runs/v0 runs/v1
+```
 
 ## Writing your own suite
 
@@ -157,7 +220,8 @@ evalharness/
   analysis.py     summaries and paired comparisons, recomputed from raw rows
   stats.py        bootstrap CIs (dependency-free)
   report.py       HTML + console reports
-suites/           four handwritten suites and one built from public benchmarks
+suites/           four handwritten suites and two built from public benchmarks
+experiments/      the prompt-tuning experiment: each prompt version, per-round write-ups, results
 tests/            graders, stats, dataset checks, runner fault handling, provider wiring, benchmark adapters
 ```
 
@@ -167,6 +231,9 @@ tests/            graders, stats, dataset checks, runner fault handling, provide
 - **Bootstrap over cases, not rows.** Three reps of one case are not three independent samples. Resampling rows gives a falsely narrow interval.
 - **Pairing matters.** Two models share the same hard cases. A paired comparison cancels per-case difficulty and detects much smaller differences than comparing two separate intervals.
 - **Keep the plumbing out of the score.** Retries, truncations, refusals and grader crashes each get their own column, so none of them can quietly move the headline number.
+- **The test is often the problem.** Fixing one judge bug and excluding faulty questions moved Haiku's score more than any prompt or effort change. Questions every model fails on every try are the first place to look.
+- **Sort failures by cause before tuning.** Classifying them showed that almost none were prompt-fixable, which explained why the prompt change did nothing, and was cheaper than more rounds.
+- **How you count refusals is a decision, not a detail.** It changed which model ranked first.
 
 ## License
 

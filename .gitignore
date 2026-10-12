@@ -4,3 +4,5 @@ __pycache__/
 .pytest_cache/
 runs/
 .env
+# Draft reports to benchmark maintainers; they describe questions that must not be published.
+reports/

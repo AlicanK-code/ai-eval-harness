@@ -14,17 +14,17 @@
 [[issues]]
 case_id = "hle-67325a61292f97f5175026dd"
 kind = "wrong key"
-reason = "Train. The key's formula follows from a sign error in the normal force (it implies the support pushes harder as the body starts to fall). Verified by hand; the model's answer on 3 of 6 tries is the correct one."
+reason = "Train. The key's formula follows from a sign error in the normal force (it implies the support pushes harder as the body starts to fall). Verified by a numerical simulation that recovers the contact forces from the motion alone: it matches the model's formula to 0.01 degrees and misses the key's by 1-7 degrees."
 
 [[issues]]
 case_id = "hle-671f0b0c7301fac39660e7a3"
 kind = "wrong key"
-reason = "Train. The keyed expression fails a limiting case (with equal permeabilities it gives a field that grows with distance) and diverges at a finite material parameter in a passive system. The physically consistent option is a different one."
+reason = "Train. The keyed expression fails a limiting case (with equal permeabilities it gives a field that grows with distance) and diverges at a finite material parameter in a passive system. The physically consistent option is a different one. Unverified: AI reasoning only."
 
 [[issues]]
 case_id = "hle-671ee933019b32e00d827382"
 kind = "wrong key"
-reason = "Train. The keyed formula contradicts the relation stated in the question itself and contains a dimensionally inconsistent term."
+reason = "Train. The keyed formula contradicts the relation stated in the question itself and contains a dimensionally inconsistent term. Unverified: AI reasoning only."
 
 [[issues]]
 case_id = "gpqa-rec7qmSnbud4FHSqL"
@@ -34,7 +34,7 @@ reason = "Test. The key treats bracket abundances as absolute log ratios. Applyi
 [[issues]]
 case_id = "gpqa-reczzzihL7btBH7RO"
 kind = "wrong key"
-reason = "Test. The standard kinetic-theory result for an electron's mean free path in a gas (about 4*sqrt(2) times the gas-gas value) contradicts the keyed option."
+reason = "Test. The standard kinetic-theory result for an electron's mean free path in a gas (about 4*sqrt(2) times the gas-gas value) contradicts the keyed option. Unverified: AI reasoning only."
 
 [[issues]]
 case_id = "hle-67391de141c297471963efc6"
@@ -44,7 +44,7 @@ reason = "Test. Running the named standard algorithm on the given inputs produce
 [[issues]]
 case_id = "hle-670eb085078b44f4766922a9"
 kind = "wrong key"
-reason = "Test. Exact rational computation for several parameter values gives a closed form that differs from the key by one term, consistently."
+reason = "Test. Verified by an independent exact rational implementation of the definitions (9 parameter combinations): it never matches the key and always matches a closed form differing from it by one term."
 
 # ---- Excluded: question can't be answered as written (high confidence) ----
 
