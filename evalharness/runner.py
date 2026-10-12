@@ -240,3 +240,70 @@ def execute(run_dir: Path, *, log: Callable[[str], None] = print) -> dict[str, i
                 log(f"  [{len(done) + i}/{total}] {counts['errors']} errors, "
                     f"{time.perf_counter() - started:.1f}s elapsed")
     return counts
+
+
+def regrade(
+    run_dir: Path, *, mock_judges: bool = False, log: Callable[[str], None] = print
+) -> dict[str, Any]:
+    """Re-mark a run's saved answers with the current grader code, without calling the model again.
+
+    Use it after fixing a grader: every round of an experiment can be re-scored the same way,
+    so comparisons between them stay fair. The previous results file is kept alongside.
+    """
+    meta = load_run_meta(run_dir)
+    suite = suite_from_snapshot(meta["suite"])
+    if file_sha256(suite.dataset) != meta["dataset_sha256"]:
+        raise RuntimeError(f"{suite.dataset} changed since this run; its answers can't be re-marked against it")
+    specs = [dict(g) for g in suite.graders]
+    if mock_judges:
+        for spec in specs:
+            if spec.get("type") in ("llm_judge", "answer_match"):
+                spec["judge_provider"], spec["judge_model"] = "mock", "mock-judge"
+    graders = build_graders(specs)
+    cases = {c.id: c for c in load_cases(suite.dataset)}
+    results_path = run_dir / "results.jsonl"
+    rows = read_jsonl(results_path)
+
+    def regrade_row(row: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
+        if row["status"] == "refused":
+            return row, None
+        ctx = GradeContext(case=cases[row["case_id"]], prompt=row["prompt"])
+        grades: dict[str, Any] = {}
+        judge_cost = 0.0
+        try:
+            for grader in graders:
+                grade = grader.grade(row["output"], ctx)
+                grades[grader.name] = grade.to_dict()
+                judge_cost += cost_usd(grade.judge_model, grade.judge_usage) or 0.0
+        except GraderError as e:
+            return row, str(e)  # keep the old grade rather than score a grader failure
+        return {**row, "grades": grades, "judge_cost_usd": round(judge_cost, 6)}, None
+
+    with ThreadPoolExecutor(max_workers=suite.run.concurrency) as pool:
+        outcomes = list(pool.map(regrade_row, rows))
+
+    new_rows = [new for new, _ in outcomes]
+    errors = [(row["case_id"], err) for row, (_, err) in zip(rows, outcomes) if err]
+    changed = sum(
+        1 for old, new in zip(rows, new_rows)
+        if {k: v.get("passed") for k, v in old.get("grades", {}).items()}
+        != {k: v.get("passed") for k, v in new.get("grades", {}).items()}
+    )
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    results_path.rename(run_dir / f"results.before-regrade-{stamp}.jsonl")
+    with results_path.open("w", encoding="utf-8") as f:
+        for row in new_rows:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+    record = {
+        "at": _now(),
+        "rows": len(rows),
+        "changed_verdicts": changed,
+        "grader_errors": len(errors),
+        "judge_cost_usd": round(sum(r.get("judge_cost_usd") or 0.0 for r in new_rows), 6),
+        "previous_results": f"results.before-regrade-{stamp}.jsonl",
+    }
+    meta.setdefault("regrades", []).append(record)
+    (run_dir / "run_config.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    log(f"{run_dir}: re-marked {len(rows)} answers, {changed} verdicts changed, {len(errors)} grader errors kept old grades")
+    return record

@@ -1,0 +1,4 @@
+# Built locally from public benchmarks. Several of them (GPQA, HLE) ask that their
+# questions never be republished, so the built files stay out of the repository.
+cases.jsonl
+sources.lock.json

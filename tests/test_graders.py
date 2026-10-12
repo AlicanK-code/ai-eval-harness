@@ -127,3 +127,8 @@ class TestLLMJudge:
         j = LLMJudge("rubric", CRITERIA, judge_provider="mock")
         assert j.grade("the exact reference", ctx("the exact reference")).passed
         assert not j.grade("unrelated words", ctx("the exact reference")).passed
+
+
+def test_token_f1_handles_non_latin_scripts():
+    assert token_f1("ANSWER: 质多文少", "质多文少") > 0.5
+    assert token_f1("café au lait", "Café au lait") == 1.0

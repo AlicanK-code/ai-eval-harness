@@ -207,3 +207,86 @@ def test_known_issues_are_excluded_but_reported(tmp_path):
     assert s["counts"]["rows"] == 13
     assert "tr-001" not in {c["case_id"] for c in s["cases"]}
     assert s["excluded"] == [{"case_id": "tr-001", "kind": "wrong key", "reason": "test", "score": 0.0}]
+
+
+def test_system_prompt_override_and_split_scores(tmp_path, monkeypatch):
+    seen = []
+
+    class Recorder:
+        name, model, retry_base_delay = "rec", "mock-rec", 0.0
+
+        def complete(self, request):
+            seen.append(request.system)
+            ok = request.trace["case_id"] in {"a", "b"}
+            return Completion("ANSWER: 1" if ok else "ANSWER: 2", "end_turn", self.model, Usage(5, 5), 0.1)
+
+    monkeypatch.setattr(runner, "make_provider", lambda *a, **k: Recorder())
+    suite_dir = tmp_path / "suite"
+    suite_dir.mkdir()
+    (suite_dir / "suite.toml").write_text(
+        '[suite]\nname = "s"\ndataset = "cases.jsonl"\nprompt_template = "{q}"\nsystem_prompt = "old"\n'
+        '[run]\nreps = 1\n[[graders]]\ntype = "numeric"\nname = "n"\nextract = \'ANSWER:\\s*(.+)\'\n',
+        encoding="utf-8")
+    cases = [("a", "train"), ("b", "test"), ("c", "test")]
+    (suite_dir / "cases.jsonl").write_text("\n".join(
+        json.dumps({"id": cid, "input": {"q": "?"}, "reference": 1, "tags": ["t", "src", split]})
+        for cid, split in cases), encoding="utf-8")
+    prompt_file = tmp_path / "v1.txt"
+    prompt_file.write_text("new prompt\n", encoding="utf-8")
+
+    assert main(["run", str(suite_dir), "--system-prompt", str(prompt_file), "--out", str(tmp_path / "run")]) == 0
+    assert set(seen) == {"new prompt"}
+    s = summarize(tmp_path / "run")
+    assert s["by_split"]["train"]["mean"] == 1.0 and s["by_split"]["test"]["mean"] == 0.5
+    assert s["system_prompt_file"] == str(prompt_file)
+
+
+def test_reviewed_cases_stay_in_scores(tmp_path):
+    suite_dir = tmp_path / "suite"
+    suite_dir.mkdir()
+    for name in ("suite.toml", "cases.jsonl"):
+        (suite_dir / name).write_text((SUITES / "triage" / name).read_text(encoding="utf-8"), encoding="utf-8")
+    (suite_dir / "known_issues.toml").write_text(
+        '[[issues]]\ncase_id = "tr-001"\nkind = "reviewed"\nexclude = false\nreason = "fine"\n', encoding="utf-8")
+    cfg = load_suite(suite_dir)
+    cfg.model.provider, cfg.model.model, cfg.run.reps = "mock", "mock-oracle", 1
+    prepare_run(cfg, tmp_path / "run")
+    execute(tmp_path / "run", log=lambda _: None)
+    s = summarize(tmp_path / "run")
+    assert s["counts"]["rows"] == 14 and s["excluded"] == []
+
+
+def test_regrade_remarks_saved_answers_without_model_calls(tmp_path, monkeypatch):
+    run_dir = mock_run(tmp_path, "mock-strong", reps=1)
+    before = read_jsonl(run_dir / "results.jsonl")
+
+    def no_model(*a, **k):
+        raise AssertionError("regrade must not call the model")
+
+    monkeypatch.setattr(runner, "make_provider", no_model)
+    # Make the grader stricter: only exact "ANSWER: <ref>" lines now pass.
+    meta = json.loads((run_dir / "run_config.json").read_text(encoding="utf-8"))
+    meta["suite"]["graders"][0]["abs_tol"] = 0.0
+    meta["suite"]["graders"][0]["extract"] = r"ANSWER:\s*(\d+)\s*$"
+    (run_dir / "run_config.json").write_text(json.dumps(meta), encoding="utf-8")
+
+    record = runner.regrade(run_dir, log=lambda _: None)
+    after = read_jsonl(run_dir / "results.jsonl")
+    assert [r["output"] for r in after] == [r["output"] for r in before]
+    assert record["changed_verdicts"] > 0
+    assert (run_dir / record["previous_results"]).exists()
+    assert json.loads((run_dir / "run_config.json").read_text(encoding="utf-8"))["regrades"][0] == record
+
+
+def test_excluded_questions_still_count_toward_cost(tmp_path):
+    run_dir = mock_run(tmp_path, "mock-oracle", reps=1)
+    full = summarize(run_dir)["cost"]["tokens"]["input_tokens"]
+    source = Path(json.loads((run_dir / "run_config.json").read_text(encoding="utf-8"))["suite"]["source"])
+    issues = source.parent / "known_issues.toml"
+    assert not issues.exists()
+    try:
+        issues.write_text('[[issues]]\ncase_id = "ar-001"\nreason = "test"\n', encoding="utf-8")
+        s = summarize(run_dir)
+        assert s["counts"]["rows"] == 15 and s["cost"]["tokens"]["input_tokens"] == full
+    finally:
+        issues.unlink()

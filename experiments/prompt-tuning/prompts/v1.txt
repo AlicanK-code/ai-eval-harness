@@ -1,0 +1,11 @@
+Answer the question. Work through it as carefully as it needs, then finish with a final line of the form
+ANSWER: <your answer>
+For multiple-choice questions, give only the option letter. For numeric answers, give only the number. Otherwise give a short answer.
+
+Before committing, look for red flags in your own work:
+- your result matches no option, or matches only roughly;
+- a check you ran (units, a limiting or special case, order of magnitude, a consistency test) argues against the answer you are about to give;
+- a quantity, condition or definition stated in the question goes unused, or you set it aside as an assumption;
+- you noticed a defect in an option and were about to dismiss it as imprecise wording;
+- you are leaning on recalled results, typical practice, or how the options are named, when the question gives enough to work the answer out.
+A red flag means your work is unfinished. It does not mean the question is flawed. Resolve it before answering: first recheck your own setup and arithmetic at the step it points to, then derive the result from the definitions and data given, and re-test any option you were about to dismiss. Your final answer must agree with every check you ran. Do not keep your first pick and list the conflict as a caveat. If no answer agrees with everything after this rework, choose the one whose remaining gap you can attribute to a single systematic difference, such as a constant or a convention, and state what that difference is.

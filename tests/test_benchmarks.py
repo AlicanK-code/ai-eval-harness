@@ -171,3 +171,20 @@ def test_build_writes_cases_and_lock(tmp_path, monkeypatch):
     assert len(rows) == 3 and rows[0]["tags"] == ["3-hard", "gpqa-diamond"]
     lock = json.loads((tmp_path / "sources.lock.json").read_text(encoding="utf-8"))
     assert lock["sources"][0]["revision"] == "abc123" and lock["sources"][1]["skipped"]
+
+
+def test_split_is_fixed_and_stratified_by_source(tmp_path, monkeypatch):
+    (tmp_path / "mix.toml").write_text(
+        'seed = 3\n[split]\ntrain_fraction = 0.25\n'
+        '[[sources]]\nadapter = "gpqa_diamond"\nn = 20\ntier = "3-hard"\n', encoding="utf-8")
+    with_rows(monkeypatch, [gpqa_row(i) for i in range(20)])
+    monkeypatch.setattr(benchmarks, "_revision", lambda repo: None)
+
+    def build_tags():
+        benchmarks.build(tmp_path, log=lambda _: None)
+        rows = [json.loads(line) for line in (tmp_path / "cases.jsonl").read_text(encoding="utf-8").splitlines()]
+        return {r["id"]: r["tags"][2] for r in rows}
+
+    first = build_tags()
+    assert sum(v == "train" for v in first.values()) == 5 and sum(v == "test" for v in first.values()) == 15
+    assert build_tags() == first  # rebuilding never reshuffles the split

@@ -26,10 +26,12 @@ _LETTER = re.compile(r"^\(?\[?([A-J])\]?\)?(?:[.):\s]|$)")
 EQUIVALENCE = {
     "id": "equivalent",
     "description": (
-        "The candidate's final answer means the same as the reference answer, or matches any one "
-        "of the accepted answers listed there. Differences in wording, formatting, notation or "
-        "units of expression don't matter; a different value, a different claim, or a hedge "
-        "between several answers does."
+        "The candidate's final answer means the same as the reference answer. When the reference "
+        "lists several accepted answers separated by '|', compare the candidate with each one on "
+        "its own: it is correct if it matches any single one, and it never needs details that "
+        "appear only in a longer accepted answer. Extra correct detail is fine; a different value, "
+        "a claim that contradicts the reference, or a hedge between different answers is not. "
+        "Differences in wording, formatting, notation or units of expression don't matter."
     ),
 }
 

@@ -15,6 +15,14 @@ from .runner import load_run_meta, read_jsonl
 from .stats import bootstrap_ci, paired_diff, percentile
 
 
+SPLITS = ("train", "test")
+
+
+def in_split(rows: list[dict[str, Any]], split: str) -> list[dict[str, Any]]:
+    """Rows whose tags (after the tier and source) mark them as part of `split`."""
+    return [r for r in rows if split in r["tags"][2:]]
+
+
 def _primary_name(meta: dict[str, Any]) -> str:
     graders = meta["suite"]["graders"]
     g = next((g for g in graders if g.get("primary")), graders[0])
@@ -70,16 +78,24 @@ def _breakdown(rows: list[dict[str, Any]], grader: str, position: int) -> dict[s
     return out
 
 
-def known_issues(meta: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """Cases with a documented problem in the case itself (a wrong or ambiguous answer key),
-    listed in known_issues.toml next to the suite config. Read at analysis time, so a
-    problem found after a run applies to that run's report too."""
-    source = meta["suite"].get("source")
-    path = Path(source).parent / "known_issues.toml" if source else None
-    if not path or not path.exists():
+def load_known_issues(suite_dir: Path) -> dict[str, dict[str, Any]]:
+    """Every entry in a suite's known_issues.toml, keyed by case id. An entry with
+    `exclude = false` records a case that was reviewed and kept; any other entry marks a
+    problem in the case itself (a wrong or ambiguous answer key) and is left out of scores."""
+    path = suite_dir / "known_issues.toml"
+    if not path.exists():
         return {}
     with path.open("rb") as f:
         return {i["case_id"]: i for i in tomllib.load(f).get("issues", [])}
+
+
+def known_issues(meta: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """The excluded cases for a run. Read at analysis time, so a problem found after a run
+    applies to that run's report too."""
+    source = meta["suite"].get("source")
+    if not source:
+        return {}
+    return {cid: i for cid, i in load_known_issues(Path(source).parent).items() if i.get("exclude", True)}
 
 
 def scored_rows(run_dir: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -105,14 +121,17 @@ def summarize(run_dir: Path) -> dict[str, Any]:
     head = metrics[primary]
 
     tags = _breakdown(rows, primary, position=0)
+    splits = {s: _metric(split_rows, primary, seed) for s in SPLITS if (split_rows := in_split(rows, s))}
     # Second tag: the benchmark source in stem-research, a category in triage.
     subtags = _breakdown([r for r in rows if len(r["tags"]) > 1], primary, position=1)
 
     ok = [r for r in rows if r["status"] == "ok"]
     latencies = [r["latency_s"] for r in ok]
-    model_costs = [r["cost_usd"] for r in rows]
+    # Spend counts every answer actually paid for, including excluded questions.
+    spent = rows + flagged
+    model_costs = [r["cost_usd"] for r in spent]
     tokens = Counter()
-    for r in rows:
+    for r in spent:
         tokens.update(r["usage"])
 
     cases: dict[str, dict[str, Any]] = {}
@@ -156,6 +175,8 @@ def summarize(run_dir: Path) -> dict[str, Any]:
         "metrics": metrics,
         "by_tag": tags,
         "by_subtag": subtags,
+        "by_split": splits,
+        "system_prompt_file": suite.get("extra", {}).get("system_prompt_file"),
         "counts": {
             "rows": len(rows),
             "expected_rows": expected,
@@ -168,7 +189,7 @@ def summarize(run_dir: Path) -> dict[str, Any]:
         },
         "cost": {
             "model_usd": None if any(c is None for c in model_costs) else sum(model_costs),
-            "judge_usd": sum(r.get("judge_cost_usd") or 0.0 for r in rows),
+            "judge_usd": sum(r.get("judge_cost_usd") or 0.0 for r in spent),
             "tokens": dict(tokens),
         },
         "latency_s": {
@@ -204,8 +225,19 @@ def compare(run_a: Path, run_b: Path) -> dict[str, Any]:
         "improved": [k for k in shared if b[k] - a[k] >= 0.5],
         "regressed": [k for k in shared if a[k] - b[k] >= 0.5],
     }
-    significant = not math.isnan(diff["ci_low"]) and (diff["ci_low"] > 0 or diff["ci_high"] < 0)
-    return {"a": sa, "b": sb, "primary_grader": primary, "diff": diff, "significant": significant, "flips": flips}
+    significant = _significant(diff)
+    by_split = {}
+    for split in SPLITS:
+        ra, rb = in_split(rows_a, split), in_split(rows_b, split)
+        if ra and rb:
+            d = paired_diff(per_case_scores(ra, primary), per_case_scores(rb, primary), seed=0)
+            by_split[split] = {**d, "significant": _significant(d)}
+    return {"a": sa, "b": sb, "primary_grader": primary, "diff": diff, "significant": significant,
+            "flips": flips, "by_split": by_split}
+
+
+def _significant(d: dict[str, float]) -> bool:
+    return not math.isnan(d["ci_low"]) and (d["ci_low"] > 0 or d["ci_high"] < 0)
 
 
 def write_summary(run_dir: Path) -> dict[str, Any]:

@@ -335,6 +335,14 @@ def build(suite_dir: Path, *, skip_unavailable: bool = False, log: Callable[[str
         for case in cases:
             case["tags"] = [src["tier"], source.tag]
             case["meta"]["source"] = source.repo
+        if "split" in spec:
+            # A fixed random split within each source, so train and test have the same mix.
+            # Train is what a tuning loop may read; test is only ever scored.
+            ids = sorted(c["id"] for c in cases)
+            random.Random(f"{seed}:split:{source.name}").shuffle(ids)
+            train = set(ids[: round(len(ids) * spec["split"]["train_fraction"])])
+            for case in cases:
+                case["tags"].append("train" if case["id"] in train else "test")
         rows.extend(cases)
         lock["sources"].append({
             "adapter": source.name, "repo": source.repo, "revision": _revision(source.repo),

@@ -1,0 +1,3 @@
+Answer the question. Work through it as carefully as it needs, then finish with a final line of the form
+ANSWER: <your answer>
+For multiple-choice questions, give only the option letter. For numeric answers, give only the number. Otherwise give a short answer.

@@ -8,12 +8,12 @@ import os
 import sys
 from pathlib import Path
 
-from .analysis import compare, write_summary
+from .analysis import compare, load_known_issues, write_summary
 from .config import SuiteConfig, load_suite
 from .dataset import health_report, load_cases, render_prompt
 from .graders import GradeContext, build_graders
 from .report import console_compare, console_summary, render_compare, render_run
-from .runner import default_run_dir, execute, prepare_run
+from .runner import default_run_dir, execute, prepare_run, regrade
 
 
 def _use_mock_judges(suite: SuiteConfig) -> None:
@@ -44,8 +44,10 @@ def cmd_validate(args: argparse.Namespace) -> int:
             problems.append(f"cases missing template fields: {health['missing_template_fields']}")
         if health["near_duplicates"]:
             problems.append(f"near-duplicate prompts: {health['near_duplicates']}")
-        if health["reference_in_prompt"]:
-            problems.append(f"reference answer appears in prompt: {health['reference_in_prompt']}")
+        reviewed = load_known_issues(suite.dataset.parent)
+        leaks = [cid for cid in health["reference_in_prompt"] if cid not in reviewed]
+        if leaks:
+            problems.append(f"reference answer appears in prompt: {leaks}")
 
         # Oracle: the reference, in the format the prompt asks for, must pass every grader.
         # Null: an empty response must fail every grader. Either failing means a broken
@@ -91,6 +93,10 @@ def cmd_run(args: argparse.Namespace) -> int:
             suite.model.model = "mock-strong"
         if args.effort:
             suite.model.effort = None if args.effort == "none" else args.effort
+        if args.system_prompt:
+            prompt_path = Path(args.system_prompt)
+            suite.system_prompt = prompt_path.read_text(encoding="utf-8").strip()
+            suite.extra["system_prompt_file"] = str(prompt_path)
         if args.reps:
             suite.run.reps = args.reps
         if args.concurrency:
@@ -106,6 +112,13 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 def cmd_report(args: argparse.Namespace) -> int:
     _finish(Path(args.run_dir))
+    return 0
+
+
+def cmd_regrade(args: argparse.Namespace) -> int:
+    for run_dir in args.run_dirs:
+        regrade(Path(run_dir), mock_judges=args.judge_provider == "mock")
+        _finish(Path(run_dir))
     return 0
 
 
@@ -166,6 +179,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--provider", choices=["anthropic", "mock"])
     p.add_argument("--model", help="e.g. claude-opus-5-5, or mock-strong / mock-weak / mock-oracle / mock-null")
     p.add_argument("--effort", choices=["low", "medium", "high", "xhigh", "max", "none"])
+    p.add_argument("--system-prompt", metavar="FILE",
+                   help="use this file's text as the system prompt instead of the suite's")
     p.add_argument("--reps", type=int)
     p.add_argument("--concurrency", type=int)
     p.add_argument("--limit", type=int, help="only the first N cases (for smoke tests)")
@@ -176,6 +191,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", help="run directory (default: runs/<suite>__<model>__<timestamp>)")
     p.add_argument("--runs-root", default="runs")
     p.set_defaults(func=cmd_run)
+
+    p = sub.add_parser("regrade", help="re-mark saved answers with the current graders (no model calls)")
+    p.add_argument("run_dirs", nargs="+")
+    p.add_argument("--judge-provider", choices=["anthropic", "mock"], help="override llm_judge graders")
+    p.set_defaults(func=cmd_regrade)
 
     p = sub.add_parser("report", help="rebuild summary.json and report.html for a run")
     p.add_argument("run_dir")

@@ -120,6 +120,19 @@ def render_run(s: dict[str, Any]) -> str:
         )
 
     tag_rows = breakdown_rows(s["by_tag"])
+    split_html = ""
+    if s.get("by_split"):
+        split_rows = "".join(
+            f"<tr><td>{escape(name)}{' <span class=pill>headline</span>' if name == 'test' else ''}</td>"
+            f"<td>{m['n_cases']}</td><td>{_pct(m['mean'])}</td><td>{_pct(m['ci_low'])} – {_pct(m['ci_high'])}</td>"
+            f"<td>{_pct(m['strict_mean'])}</td></tr>"
+            for name, m in s["by_split"].items()
+        )
+        split_html = (
+            "<h2>Train / test</h2><p class='sub'>Tuning reads train only; test is never read and is the "
+            "number to report.</p><div class='table-wrap'><table><tr><th>Split</th><th>Cases</th><th>Mean</th>"
+            f"<th>95% CI</th><th>Strict</th></tr>{split_rows}</table></div>"
+        )
     source_html = ""
     if s.get("by_subtag"):
         source_html = (
@@ -182,6 +195,7 @@ def render_run(s: dict[str, Any]) -> str:
  — scores use status=ok rows only; "strict" counts every other status as 0.</span></div>
 {error_html}
 {excluded_html}
+{split_html}
 <h2>Graders</h2><div class="table-wrap"><table><tr><th>Grader</th><th>Mean</th><th>95% CI</th><th>Pass rate</th><th>Answered</th></tr>{grader_rows}</table></div>
 <h2>By tag ({escape(s['primary_grader'])})</h2><div class="table-wrap"><table><tr><th>Tag</th><th>Cases</th><th></th><th>Mean</th></tr>{tag_rows}</table></div>
 {source_html}
@@ -250,6 +264,9 @@ def console_summary(s: dict[str, Any]) -> str:
         f"noise floor +/-{_pct(s['noise_floor'])})",
         f"  pass rate          {_pct(h['pass_rate'])}   strict mean {_pct(h['strict_mean'])}",
     ]
+    for split, m in (s.get("by_split") or {}).items():
+        lines.append(f"  {split:<18} {_pct(m['mean'])}  (95% CI {_pct(m['ci_low'])} to {_pct(m['ci_high'])}, "
+                     f"n={m['n_cases']}, strict {_pct(m['strict_mean'])})")
     for name, m in s["metrics"].items():
         if name != s["primary_grader"]:
             lines.append(f"  {name:<18} {_pct(m['mean'])}  (pass {_pct(m['pass_rate'])})")
@@ -272,6 +289,9 @@ def console_compare(cmp: dict[str, Any]) -> str:
         f"B {b['provider']}:{b['model']:<20} {_pct(b['headline']['mean'])}",
         f"B - A = {d['mean_diff'] * 100:+.1f} pts  (paired 95% CI {d['ci_low'] * 100:+.1f} to {d['ci_high'] * 100:+.1f}, "
         f"n={d['n']} cases) -> {verdict}",
+        *[f"  {split}: B - A = {d['mean_diff'] * 100:+.1f} pts  (95% CI {d['ci_low'] * 100:+.1f} to "
+          f"{d['ci_high'] * 100:+.1f}, n={d['n']}) -> {'SIGNIFICANT' if d['significant'] else 'not significant'}"
+          for split, d in (cmp.get("by_split") or {}).items()],
         f"improved: {', '.join(cmp['flips']['improved']) or '-'}",
         f"regressed: {', '.join(cmp['flips']['regressed']) or '-'}",
     ])

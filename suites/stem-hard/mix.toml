@@ -1,0 +1,35 @@
+# Hard and frontier questions for tuning a system prompt, with a fixed train/test split.
+# Build it with:  evalh fetch suites/stem-hard
+#
+# Tags on every case: [tier, source, split]. A tuning loop may read the train cases'
+# transcripts; the test cases are only ever scored, and their score is the headline.
+
+seed = 11
+
+[split]
+# A third of each source for tuning, two thirds held out.
+train_fraction = 0.34
+
+# PhD-level biology, chemistry and physics. Gated: accept the terms on Hugging Face first.
+[[sources]]
+adapter = "gpqa_diamond"
+n = 70
+tier = "3-hard"
+
+# Competition maths, levels 4-5, numeric answers.
+[[sources]]
+adapter = "math500_hard"
+n = 25
+tier = "3-hard"
+
+# Questions about full NLP research papers; about one in five has no answer in the paper.
+[[sources]]
+adapter = "qasper"
+n = 15
+tier = "3-hard"
+
+# Expert questions at the edge of current models; text-only. Gated, like GPQA.
+[[sources]]
+adapter = "hle_text"
+n = 40
+tier = "4-frontier"

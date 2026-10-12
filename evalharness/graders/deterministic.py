@@ -124,7 +124,7 @@ class JsonMatch:
 
 
 def _tokens(text: str) -> list[str]:
-    return re.findall(r"[a-z0-9]+", text.lower())
+    return re.findall(r"[^\W_]+", text.lower())  # runs of letters/digits, in any script
 
 
 def token_f1(candidate: str, reference: str) -> float:

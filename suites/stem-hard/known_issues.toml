@@ -1,0 +1,107 @@
+# Cases with a problem in the case itself, found by reading questions a model failed.
+#
+# Rule, fixed before re-scoring: only HIGH-confidence problems with a concrete, checkable
+# argument are excluded (no `exclude` key). Medium/low-confidence findings are recorded with
+# `exclude = false`: they stay in every score. Reasons avoid reproducing question text, at the
+# datasets' request. Train cases were reviewed in round 2; test cases by a separate key audit
+# after tuning stopped, which judged keys only and proposed no prompt changes.
+#
+# Limitation: only questions the model failed at least once were audited, so a wrong key
+# that the model happened to match would not have been caught.
+
+# ---- Excluded: answer key is wrong (high confidence) ----
+
+[[issues]]
+case_id = "hle-67325a61292f97f5175026dd"
+kind = "wrong key"
+reason = "Train. The key's formula follows from a sign error in the normal force (it implies the support pushes harder as the body starts to fall). Verified by hand; the model's answer on 3 of 6 tries is the correct one."
+
+[[issues]]
+case_id = "hle-671f0b0c7301fac39660e7a3"
+kind = "wrong key"
+reason = "Train. The keyed expression fails a limiting case (with equal permeabilities it gives a field that grows with distance) and diverges at a finite material parameter in a passive system. The physically consistent option is a different one."
+
+[[issues]]
+case_id = "hle-671ee933019b32e00d827382"
+kind = "wrong key"
+reason = "Train. The keyed formula contradicts the relation stated in the question itself and contains a dimensionally inconsistent term."
+
+[[issues]]
+case_id = "gpqa-rec7qmSnbud4FHSqL"
+kind = "wrong key"
+reason = "Test. The key treats bracket abundances as absolute log ratios. Applying the standard definition to the given values gives a ratio of 10^0.6 (about 3.98), not the keyed value. Verified by hand."
+
+[[issues]]
+case_id = "gpqa-reczzzihL7btBH7RO"
+kind = "wrong key"
+reason = "Test. The standard kinetic-theory result for an electron's mean free path in a gas (about 4*sqrt(2) times the gas-gas value) contradicts the keyed option."
+
+[[issues]]
+case_id = "hle-67391de141c297471963efc6"
+kind = "wrong key"
+reason = "Test. Running the named standard algorithm on the given inputs produces a different answer, and the keyed answer is not part of the algorithm's output at all. Verified by running the algorithm."
+
+[[issues]]
+case_id = "hle-670eb085078b44f4766922a9"
+kind = "wrong key"
+reason = "Test. Exact rational computation for several parameter values gives a closed form that differs from the key by one term, consistently."
+
+# ---- Excluded: question can't be answered as written (high confidence) ----
+
+[[issues]]
+case_id = "gpqa-recVvpD8miVjmmyfe"
+kind = "unanswerable"
+reason = "Test. The examples given underdetermine the rule; every option is consistent with them."
+
+[[issues]]
+case_id = "hle-6723a1419293b01661360a94"
+kind = "unanswerable"
+reason = "Test. The question asks for several specific items; the short key answers none of them, so no answer in the requested form can be graded against it."
+
+[[issues]]
+case_id = "hle-67175c6d4b3fa6d2c1eb66dd"
+kind = "unanswerable"
+reason = "Test. The calculation needs values from design curves the question refers to but does not include."
+
+[[issues]]
+case_id = "hle-67244f264d59b659ef10889c"
+kind = "unanswerable"
+reason = "Test. The stated conditions allow a range of answers; the key is only one possible case."
+
+# ---- Reviewed and kept in the score (medium/low confidence, or a false alarm) ----
+
+[[issues]]
+case_id = "hle-67173a11ffe2e8bed48b717f"
+kind = "reviewed"
+exclude = false
+reason = "The leak check fires because the correct answer equals a value stated in the question. That is part of the problem's design, not a leaked answer key."
+
+[[issues]]
+case_id = "hle-6710b2cbd1af6b4823c090d4"
+kind = "reviewed"
+exclude = false
+reason = "Train, medium confidence: refers to equations and a constant that are not included; the keyed value could not be reproduced."
+
+[[issues]]
+case_id = "gpqa-recf6ayQmL1SxKbvW"
+kind = "reviewed"
+exclude = false
+reason = "Train, medium confidence: the keyed option is debatable; the model's choice describes standard practice."
+
+[[issues]]
+case_id = "hle-66fd89bd8c7969267538ba86"
+kind = "reviewed"
+exclude = false
+reason = "Train, low confidence: the answer depends on which rare forms are counted."
+
+[[issues]]
+case_id = "hle-67434c26e839fa1a02de4251"
+kind = "reviewed"
+exclude = false
+reason = "Test, medium confidence: the answer depends on which phase convention is meant."
+
+[[issues]]
+case_id = "hle-66fdaf20d1e0bb15b8fc1eb6"
+kind = "reviewed"
+exclude = false
+reason = "Test, medium confidence: two options are defensible."

@@ -1,0 +1,30 @@
+[suite]
+name = "stem-hard"
+description = "150 hard and frontier questions (GPQA, MATH, QASPER, HLE) with a fixed train/test split, for tuning a system prompt."
+# Built by `evalh fetch suites/stem-hard` from mix.toml; not committed (see .gitignore).
+dataset = "cases.jsonl"
+# The baseline prompt (v0). Tuning rounds pass their own with --system-prompt.
+system_prompt = """Answer the question. Work through it as carefully as it needs, then finish with a final line of the form
+ANSWER: <your answer>
+For multiple-choice questions, give only the option letter. For numeric answers, give only the number. Otherwise give a short answer."""
+prompt_template = "{question}"
+
+[model]
+provider = "anthropic"
+model = "claude-haiku-5-5"
+max_tokens = 64000
+effort = "medium"
+
+[run]
+reps = 3
+concurrency = 4
+timeout_s = 900
+
+[mock]
+answer_template = "Working through the question.\nANSWER: {answer}"
+
+[[graders]]
+type = "answer_match"
+name = "correct"
+primary = true
+judge_model = "claude-sonnet-5-5"
