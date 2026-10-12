@@ -4,6 +4,8 @@ A small evaluation harness for LLM applications that is careful about what its n
 
 You write test cases and a grading rule. It runs a model on every case several times, then scores each output. It reports a mean with a confidence interval, plus cost and latency. It can also tell you whether a change between two runs is real or just noise.
 
+**New to evals?** Read the [plain-language overview](https://alicank-code.github.io/github-portfolio/eval-harness.html). It explains what the harness does with no code or statistics, and shows what it found when comparing Claude Haiku 5.5, Sonnet 5.5 and Opus 5.5 on 110 science and research questions.
+
 ```
 $ evalh run suites/arithmetic --provider mock --model mock-strong
 
