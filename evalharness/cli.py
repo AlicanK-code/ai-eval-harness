@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -17,7 +18,7 @@ from .runner import default_run_dir, execute, prepare_run
 
 def _use_mock_judges(suite: SuiteConfig) -> None:
     for spec in suite.graders:
-        if spec.get("type") == "llm_judge":
+        if spec.get("type") in ("llm_judge", "answer_match"):
             spec["judge_provider"] = "mock"
             spec["judge_model"] = "mock-judge"
 
@@ -28,6 +29,9 @@ def cmd_validate(args: argparse.Namespace) -> int:
     for path in args.suites:
         suite = load_suite(Path(path))
         _use_mock_judges(suite)  # validation must be free and deterministic
+        if not suite.dataset.exists() and (suite.dataset.parent / "mix.toml").exists():
+            print(f"\n== {suite.name} ==\n  skipped: built from public benchmarks; run `evalh fetch {path}` first")
+            continue
         cases = load_cases(suite.dataset)
         health = health_report(cases, suite.prompt_template)
         graders = build_graders(suite.graders)
@@ -94,7 +98,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         if args.judge_provider == "mock" or (suite.model.provider == "mock" and args.judge_provider is None):
             _use_mock_judges(suite)
         run_dir = Path(args.out) if args.out else default_run_dir(suite, Path(args.runs_root))
-        prepare_run(suite, run_dir, limit=args.limit)
+        prepare_run(suite, run_dir, limit=args.limit, per_group=args.per_group)
     counts = execute(run_dir)
     _finish(run_dir)
     return 0 if counts["errors"] == 0 else 3
@@ -103,6 +107,17 @@ def cmd_run(args: argparse.Namespace) -> int:
 def cmd_report(args: argparse.Namespace) -> int:
     _finish(Path(args.run_dir))
     return 0
+
+
+def cmd_fetch(args: argparse.Namespace) -> int:
+    from .benchmarks import FetchError, build
+
+    try:
+        build(Path(args.suite), skip_unavailable=args.skip_unavailable)
+    except FetchError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    return cmd_validate(argparse.Namespace(suites=[args.suite]))
 
 
 def cmd_compare(args: argparse.Namespace) -> int:
@@ -114,13 +129,36 @@ def cmd_compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def load_dotenv(path: Path = Path(".env")) -> None:
+    """Read KEY=value lines from a git-ignored .env file, so secrets such as
+    ANTHROPIC_API_KEY never need to be typed into a shell or committed. Variables
+    already set in the environment win."""
+    if not path.is_file():
+        return
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        value = value.strip().strip("\"'")
+        if value:
+            os.environ.setdefault(key.strip(), value)
+
+
 def main(argv: list[str] | None = None) -> int:
+    load_dotenv()
     parser = argparse.ArgumentParser(prog="evalh", description="Run, grade, and compare LLM evals.")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("validate", help="check datasets and graders without calling a model")
     p.add_argument("suites", nargs="+", help="suite directories or suite.toml files")
     p.set_defaults(func=cmd_validate)
+
+    p = sub.add_parser("fetch", help="build a suite's cases from public benchmarks (see its mix.toml)")
+    p.add_argument("suite", help="suite directory containing mix.toml")
+    p.add_argument("--skip-unavailable", action="store_true",
+                   help="leave out sources that can't be downloaded (e.g. gated datasets) instead of failing")
+    p.set_defaults(func=cmd_fetch)
 
     p = sub.add_parser("run", help="run a suite (or resume a run)")
     p.add_argument("suite", nargs="?", help="suite directory or suite.toml")
@@ -131,6 +169,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--reps", type=int)
     p.add_argument("--concurrency", type=int)
     p.add_argument("--limit", type=int, help="only the first N cases (for smoke tests)")
+    p.add_argument("--per-group", type=int,
+                   help="only the first N cases from each source/tag group (a smoke test that covers every group)")
     p.add_argument("--judge-provider", choices=["anthropic", "mock"],
                    help="override llm_judge graders (defaults to mock when --provider mock)")
     p.add_argument("--out", help="run directory (default: runs/<suite>__<model>__<timestamp>)")

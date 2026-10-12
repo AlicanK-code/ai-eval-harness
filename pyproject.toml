@@ -13,6 +13,7 @@ dependencies = ["anthropic>=0.97"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+benchmarks = ["datasets>=3", "huggingface_hub>=0.25"]
 
 [project.scripts]
 evalh = "evalharness.cli:main"

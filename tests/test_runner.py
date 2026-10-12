@@ -121,11 +121,18 @@ def anthropic_with(message, monkeypatch):
     provider = AnthropicProvider("claude-opus-5-5")
     calls = []
 
-    def create(**kwargs):
-        calls.append(kwargs)
-        return message
+    class FakeStream:
+        def __enter__(self):
+            return SimpleNamespace(get_final_message=lambda: message)
 
-    client = SimpleNamespace(messages=SimpleNamespace(create=create))
+        def __exit__(self, *exc):
+            return False
+
+    def stream(**kwargs):
+        calls.append(kwargs)
+        return FakeStream()
+
+    client = SimpleNamespace(messages=SimpleNamespace(stream=stream))
     provider.client = SimpleNamespace(with_options=lambda **_: client)
     return provider, calls
 
@@ -155,3 +162,48 @@ def test_anthropic_provider_reports_refusal_category(monkeypatch):
     provider, _ = anthropic_with(fake_message("claude-opus-5-5", "refusal", ""), monkeypatch)
     out = provider.complete(CompletionRequest(prompt="p"))
     assert out.stop_reason == "refusal" and out.refusal_category == "cyber"
+
+
+def test_select_cases_per_group():
+    from evalharness.dataset import Case
+    from evalharness.runner import select_cases
+
+    cases = [Case(f"{src}{i}", {}, "x", tags=("tier", src)) for src in "abc" for i in range(3)]
+    assert [c.id for c in select_cases(cases, per_group=1)] == ["a0", "b0", "c0"]
+    assert [c.id for c in select_cases(cases, limit=2, per_group=2)] == ["a0", "a1"]
+
+
+class BrokeProvider:
+    name, model, retry_base_delay = "broke", "mock-broke", 0.0
+
+    def complete(self, request):
+        raise ProviderError("billing", "Your credit balance is too low", retryable=False)
+
+
+def test_account_errors_stop_the_run(tmp_path, monkeypatch):
+    monkeypatch.setattr(runner, "make_provider", lambda *a, **k: BrokeProvider())
+    cfg = load_suite(SUITES / "arithmetic")
+    cfg.run.concurrency = 1
+    prepare_run(cfg, tmp_path / "run")
+    counts = execute(tmp_path / "run", log=lambda _: None)
+    assert counts["results"] == 0
+    assert counts["errors"] < 16 * cfg.run.reps  # queued requests were never sent
+
+
+def test_known_issues_are_excluded_but_reported(tmp_path):
+    suite_dir = tmp_path / "suite"
+    suite_dir.mkdir()
+    for name in ("suite.toml", "cases.jsonl"):
+        (suite_dir / name).write_text((SUITES / "triage" / name).read_text(encoding="utf-8"), encoding="utf-8")
+    cfg = load_suite(suite_dir)
+    cfg.model.provider, cfg.model.model, cfg.run.reps = "mock", "mock-null", 1
+    prepare_run(cfg, tmp_path / "run")
+    execute(tmp_path / "run", log=lambda _: None)
+    assert summarize(tmp_path / "run")["counts"]["rows"] == 14
+
+    (suite_dir / "known_issues.toml").write_text(
+        '[[issues]]\ncase_id = "tr-001"\nkind = "wrong key"\nreason = "test"\n', encoding="utf-8")
+    s = summarize(tmp_path / "run")
+    assert s["counts"]["rows"] == 13
+    assert "tr-001" not in {c["case_id"] for c in s["cases"]}
+    assert s["excluded"] == [{"case_id": "tr-001", "kind": "wrong key", "reason": "test", "score": 0.0}]

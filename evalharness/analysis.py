@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import math
+import tomllib
 from collections import Counter, defaultdict
 from pathlib import Path
 from statistics import mean
@@ -58,11 +59,42 @@ def _metric(rows: list[dict[str, Any]], grader: str, seed: int) -> dict[str, Any
     }
 
 
+def _breakdown(rows: list[dict[str, Any]], grader: str, position: int) -> dict[str, dict[str, Any]]:
+    groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for r in rows:
+        groups[r["tags"][position] if len(r["tags"]) > position else "untagged"].append(r)
+    out = {}
+    for tag, tag_rows in sorted(groups.items()):
+        s = per_case_scores(tag_rows, grader)
+        out[tag] = {"mean": mean(s.values()) if s else float("nan"), "n_cases": len({r["case_id"] for r in tag_rows})}
+    return out
+
+
+def known_issues(meta: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Cases with a documented problem in the case itself (a wrong or ambiguous answer key),
+    listed in known_issues.toml next to the suite config. Read at analysis time, so a
+    problem found after a run applies to that run's report too."""
+    source = meta["suite"].get("source")
+    path = Path(source).parent / "known_issues.toml" if source else None
+    if not path or not path.exists():
+        return {}
+    with path.open("rb") as f:
+        return {i["case_id"]: i for i in tomllib.load(f).get("issues", [])}
+
+
+def scored_rows(run_dir: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """(rows that count toward scores, rows excluded as known issues)."""
+    issues = known_issues(load_run_meta(run_dir))
+    rows = read_jsonl(run_dir / "results.jsonl")
+    return [r for r in rows if r["case_id"] not in issues], [r for r in rows if r["case_id"] in issues]
+
+
 def summarize(run_dir: Path) -> dict[str, Any]:
     meta = load_run_meta(run_dir)
     suite = meta["suite"]
-    rows = read_jsonl(run_dir / "results.jsonl")
-    errors = read_jsonl(run_dir / "errors.jsonl")
+    issues = known_issues(meta)
+    rows, flagged = scored_rows(run_dir)
+    errors = [e for e in read_jsonl(run_dir / "errors.jsonl") if e["case_id"] not in issues]
     done = {(r["case_id"], r["rep"]) for r in rows}
     unresolved = [e for e in errors if (e["case_id"], e["rep"]) not in done]
     seed = suite["run"]["seed"]
@@ -72,13 +104,9 @@ def summarize(run_dir: Path) -> dict[str, Any]:
     metrics = {name: _metric(rows, name, seed) for name in grader_names}
     head = metrics[primary]
 
-    by_tag: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for r in rows:
-        by_tag[r["tags"][0] if r["tags"] else "untagged"].append(r)
-    tags = {}
-    for tag, tag_rows in sorted(by_tag.items()):
-        s = per_case_scores(tag_rows, primary)
-        tags[tag] = {"mean": mean(s.values()) if s else float("nan"), "n_cases": len({r["case_id"] for r in tag_rows})}
+    tags = _breakdown(rows, primary, position=0)
+    # Second tag: the benchmark source in stem-research, a category in triage.
+    subtags = _breakdown([r for r in rows if len(r["tags"]) > 1], primary, position=1)
 
     ok = [r for r in rows if r["status"] == "ok"]
     latencies = [r["latency_s"] for r in ok]
@@ -127,6 +155,7 @@ def summarize(run_dir: Path) -> dict[str, Any]:
         "noise_floor": (head["ci_high"] - head["ci_low"]) / 2 if rows else float("nan"),
         "metrics": metrics,
         "by_tag": tags,
+        "by_subtag": subtags,
         "counts": {
             "rows": len(rows),
             "expected_rows": expected,
@@ -147,6 +176,16 @@ def summarize(run_dir: Path) -> dict[str, Any]:
             "p95": percentile(latencies, 95) if latencies else float("nan"),
         },
         "cases": list(cases.values()),
+        # Left out of every number above; shown with this run's score so nothing is hidden.
+        "excluded": [
+            {
+                "case_id": cid,
+                "kind": issue.get("kind", ""),
+                "reason": issue.get("reason", ""),
+                "score": per_case_scores([r for r in flagged if r["case_id"] == cid], primary).get(cid),
+            }
+            for cid, issue in sorted(issues.items())
+        ],
     }
 
 
@@ -156,8 +195,8 @@ def compare(run_a: Path, run_b: Path) -> dict[str, Any]:
     if load_run_meta(run_a)["dataset_sha256"] != load_run_meta(run_b)["dataset_sha256"]:
         raise ValueError("runs used different datasets; a paired comparison would be meaningless")
     primary = sa["primary_grader"]
-    rows_a = read_jsonl(run_a / "results.jsonl")
-    rows_b = read_jsonl(run_b / "results.jsonl")
+    rows_a, _ = scored_rows(run_a)
+    rows_b, _ = scored_rows(run_b)
     a, b = per_case_scores(rows_a, primary), per_case_scores(rows_b, primary)
     diff = paired_diff(a, b, seed=0)
     shared = sorted(set(a) & set(b))

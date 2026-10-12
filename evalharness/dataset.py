@@ -18,6 +18,8 @@ class Case:
     input: dict[str, Any]
     reference: Any
     tags: tuple[str, ...] = field(default_factory=tuple)
+    # Free-form per-case data for graders and reports, e.g. {"answer_type": "choice"}.
+    meta: dict[str, Any] = field(default_factory=dict, hash=False, compare=False)
 
     @property
     def primary_tag(self) -> str:
@@ -49,6 +51,7 @@ def load_cases(path: Path) -> list[Case]:
                     input=row["input"],
                     reference=row["reference"],
                     tags=tuple(row.get("tags", [])),
+                    meta=row.get("meta", {}),
                 )
             )
     ids = Counter(c.id for c in cases)
@@ -91,13 +94,25 @@ def health_report(cases: list[Case], prompt_template: str) -> dict[str, Any]:
         else:
             seen[text] = cid
 
-    # Label leakage: the reference appearing verbatim in the prompt the model sees.
+    # Label leakage: the reference appearing verbatim in the prompt the model sees. A
+    # reference that also appears in prompts whose answer is something else is one of the
+    # offered options ("answer SUPPORT or CONTRADICT"), not a leak. Reading-comprehension
+    # cases, where the answer is meant to be in the document, opt out via meta.
     leaks = []
     for c in cases:
         ref = c.reference
-        if isinstance(ref, str) and len(ref) >= 4 and c.id in rendered:
-            if _normalise_for_dupes(ref) in rendered[c.id]:
-                leaks.append(c.id)
+        if not (isinstance(ref, str) and len(ref) >= 4 and c.id in rendered):
+            continue
+        if c.meta.get("answer_in_context"):
+            continue
+        needle = _normalise_for_dupes(ref)
+        if needle not in rendered[c.id]:
+            continue
+        offered_elsewhere = any(
+            needle in rendered[o.id] for o in cases if o.id in rendered and o.reference != ref
+        )
+        if not offered_elsewhere:
+            leaks.append(c.id)
 
     lengths = sorted(len(t) for t in rendered.values()) or [0]
     tag_counts = Counter(c.primary_tag for c in cases)

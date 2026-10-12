@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .answer_match import AnswerMatch
 from .base import Grade, GradeContext, Grader, GraderError
 from .deterministic import ExactMatch, JsonMatch, Numeric, TokenF1
 from .llm_judge import LLMJudge
@@ -12,6 +13,7 @@ REGISTRY = {
     "json_match": JsonMatch,
     "token_f1": TokenF1,
     "llm_judge": LLMJudge,
+    "answer_match": AnswerMatch,
 }
 
 

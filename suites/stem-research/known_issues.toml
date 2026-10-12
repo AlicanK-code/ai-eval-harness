@@ -1,0 +1,13 @@
+# Cases with a problem in the case itself rather than in a model's answer. They stay in
+# results.jsonl, but every score leaves them out, and each report lists them with the
+# reason. Found by reading the cases that every model got "wrong" on every try.
+
+[[issues]]
+case_id = "mmlu-pro-2933"
+kind = "wrong key"
+reason = "The key's answer, 'ontogeny recapitulates phylogeny', is Haeckel's discredited recapitulation theory. All three models chose (F), that early human, fish and bird embryos share features, which is the accepted modern answer."
+
+[[issues]]
+case_id = "arc-Mercury_7139650"
+kind = "ambiguous"
+reason = "Asks what type of energy regenerative brakes are 'storing'. The key says potential (energy held in the battery); kinetic (the energy the brakes capture) is an equally defensible reading, and every model chose it."

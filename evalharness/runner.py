@@ -27,6 +27,9 @@ from .graders import GradeContext, Grader, GraderError, build_graders
 from .pricing import cost_usd
 from .providers import CompletionRequest, Provider, ProviderError, complete_with_retries, make_provider
 
+# Account-level failures: every other request in the run would fail identically.
+FATAL_ERRORS = {"auth", "billing"}
+
 STATUS_BY_STOP_REASON = {
     "end_turn": "ok",
     "stop_sequence": "ok",
@@ -136,7 +139,24 @@ def default_run_dir(suite: SuiteConfig, root: Path = Path("runs")) -> Path:
     return root / f"{suite.name}__{suite.model.model}__{stamp}"
 
 
-def prepare_run(suite: SuiteConfig, run_dir: Path, limit: int | None = None) -> None:
+def select_cases(cases: list[Case], limit: int | None = None, per_group: int | None = None) -> list[Case]:
+    """Optionally trim the case list for smoke tests: the first `limit` cases, and/or the
+    first `per_group` cases of each group (second tag if present, else first tag)."""
+    if per_group:
+        counts: dict[str, int] = {}
+        kept = []
+        for c in cases:
+            group = c.tags[1] if len(c.tags) > 1 else c.primary_tag
+            if counts.get(group, 0) < per_group:
+                counts[group] = counts.get(group, 0) + 1
+                kept.append(c)
+        cases = kept
+    return cases[:limit] if limit else cases
+
+
+def prepare_run(
+    suite: SuiteConfig, run_dir: Path, limit: int | None = None, per_group: int | None = None
+) -> None:
     """Create the run directory and freeze the exact config + dataset hash used."""
     run_dir.mkdir(parents=True, exist_ok=False)
     meta = {
@@ -144,6 +164,7 @@ def prepare_run(suite: SuiteConfig, run_dir: Path, limit: int | None = None) -> 
         "created_at": _now(),
         "dataset_sha256": file_sha256(suite.dataset),
         "limit": limit,
+        "per_group": per_group,
         "suite": suite.snapshot(),
     }
     (run_dir / "run_config.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
@@ -162,12 +183,10 @@ def execute(run_dir: Path, *, log: Callable[[str], None] = print) -> dict[str, i
             f"{suite.dataset} changed since this run started; scores would not be comparable. "
             "Start a new run instead of resuming."
         )
-    cases = load_cases(suite.dataset)
-    if meta.get("limit"):
-        cases = cases[: meta["limit"]]
+    cases = select_cases(load_cases(suite.dataset), meta.get("limit"), meta.get("per_group"))
 
     for spec in suite.graders:
-        if spec.get("type") == "llm_judge" and spec.get("judge_model") == suite.model.model:
+        if spec.get("type") in ("llm_judge", "answer_match") and spec.get("judge_model") == suite.model.model:
             log(f"warning: grader {spec.get('name')!r} uses the model under test as its own judge "
                 "(self-preference bias). Prefer a different judge model.")
 
@@ -195,7 +214,10 @@ def execute(run_dir: Path, *, log: Callable[[str], None] = print) -> dict[str, i
         errors_path.open("a", encoding="utf-8") as errors_f,
     ):
         futures = {pool.submit(run_one, ctx, case, rep): (case, rep) for case, rep in pending}
+        aborted = None
         for i, future in enumerate(as_completed(futures), 1):
+            if future.cancelled():
+                continue
             try:
                 kind, row = future.result()
             except Exception as e:  # a bug in the harness must not masquerade as a score
@@ -204,6 +226,12 @@ def execute(run_dir: Path, *, log: Callable[[str], None] = print) -> dict[str, i
                     "case_id": case.id, "rep": rep, "tags": list(case.tags), "timestamp": _now(),
                     "stage": "harness", "error_class": type(e).__name__, "message": str(e)[:500],
                 }
+            if kind == "error" and row.get("error_class") in FATAL_ERRORS and not aborted:
+                # Every remaining request would fail the same way; don't send them.
+                aborted = row["error_class"]
+                cancelled = sum(f.cancel() for f in futures)
+                log(f"  stopping: {row['error_class']} error ({row.get('message', '')[:160]}). "
+                    f"{cancelled} queued requests not sent; fix it and use --resume.")
             target = results_f if kind == "result" else errors_f
             target.write(json.dumps(row, ensure_ascii=False) + "\n")
             target.flush()

@@ -1,0 +1,49 @@
+# Which public benchmarks this suite samples, and how many questions from each.
+# Build it with:  evalh fetch suites/stem-research
+#
+# The first tag on every case is its difficulty tier, so the report's per-tag view shows
+# how each model's score falls as the questions get harder. The second tag is the source.
+
+seed = 7
+
+# Grade-school science, multiple choice.
+[[sources]]
+adapter = "arc_challenge"
+n = 15
+tier = "1-easy"
+
+# University STEM, 10 options per question, spread across six subjects.
+[[sources]]
+adapter = "mmlu_pro_stem"
+n = 20
+tier = "2-medium"
+
+# Does a paper abstract support or contradict a scientific claim? Balanced across labels.
+[[sources]]
+adapter = "scifact"
+n = 15
+tier = "2-medium"
+
+# Competition maths, the two hardest levels, numeric answers only.
+[[sources]]
+adapter = "math500_hard"
+n = 15
+tier = "3-hard"
+
+# Questions about full NLP research papers; about one in five has no answer in the paper.
+[[sources]]
+adapter = "qasper"
+n = 10
+tier = "3-hard"
+
+# PhD-level biology, chemistry and physics. Gated: accept the terms on Hugging Face first.
+[[sources]]
+adapter = "gpqa_diamond"
+n = 25
+tier = "3-hard"
+
+# Expert questions at the edge of current models; text-only. Gated, like GPQA.
+[[sources]]
+adapter = "hle_text"
+n = 10
+tier = "4-frontier"

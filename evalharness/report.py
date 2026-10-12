@@ -65,6 +65,10 @@ def _secs(x: float) -> str:
     return "-" if math.isnan(x) else f"{x:.2f}s"
 
 
+def _score_text(x: float | None) -> str:
+    return "-" if x is None else f"{x:.2f}"
+
+
 def _card(k: str, v: str, n: str = "") -> str:
     return f'<div class="card"><div class="k">{escape(k)}</div><div class="v">{v}</div><div class="n">{n}</div></div>'
 
@@ -108,11 +112,20 @@ def render_run(s: dict[str, Any]) -> str:
         f"<td>{_pct(m['pass_rate'])}</td><td>{_pct(m['answered_rate'])}</td></tr>"
         for name, m in s["metrics"].items()
     )
-    tag_rows = "".join(
-        f"<tr><td>{escape(tag)}</td><td>{t['n_cases']}</td><td style='width:50%'>{_bar(t['mean'])}</td>"
-        f"<td>{_pct(t['mean'])}</td></tr>"
-        for tag, t in s["by_tag"].items()
-    )
+    def breakdown_rows(groups: dict[str, Any]) -> str:
+        return "".join(
+            f"<tr><td>{escape(tag)}</td><td>{t['n_cases']}</td><td style='width:50%'>{_bar(t['mean'])}</td>"
+            f"<td>{_pct(t['mean'])}</td></tr>"
+            for tag, t in groups.items()
+        )
+
+    tag_rows = breakdown_rows(s["by_tag"])
+    source_html = ""
+    if s.get("by_subtag"):
+        source_html = (
+            f"<h2>By second tag ({escape(s['primary_grader'])})</h2><div class=\"table-wrap\"><table>"
+            f"<tr><th>Tag</th><th>Cases</th><th></th><th>Mean</th></tr>{breakdown_rows(s['by_subtag'])}</table></div>"
+        )
 
     case_rows = []
     for case in sorted(s["cases"], key=lambda c: (c["mean"] if c["mean"] is not None else -1, c["case_id"])):
@@ -136,6 +149,20 @@ def render_run(s: dict[str, Any]) -> str:
             f"<td class='{cls}'>{mean_txt or '–'}</td></tr>"
         )
 
+    excluded_html = ""
+    if s.get("excluded"):
+        items = "".join(
+            f"<tr><td class='mono'>{escape(e['case_id'])}</td><td>{escape(e['kind'])}</td>"
+            f"<td>{escape(e['reason'])}</td><td>{_score_text(e['score'])}</td></tr>"
+            for e in s["excluded"]
+        )
+        excluded_html = (
+            "<h2>Excluded: known problems with the case</h2><p class='sub'>Listed in the suite's "
+            "<span class='mono'>known_issues.toml</span>. These cases stay in results.jsonl but are left "
+            "out of every score above.</p><div class='table-wrap'><table><tr><th>Case</th><th>Kind</th>"
+            f"<th>Reason</th><th>This run</th></tr>{items}</table></div>"
+        )
+
     error_html = ""
     if errors:
         error_html = (
@@ -154,8 +181,10 @@ def render_run(s: dict[str, Any]) -> str:
 <span class="sub">refusal rate {_pct(c['refusal_rate'])} · truncation rate {_pct(c['truncation_rate'])}
  — scores use status=ok rows only; "strict" counts every other status as 0.</span></div>
 {error_html}
+{excluded_html}
 <h2>Graders</h2><div class="table-wrap"><table><tr><th>Grader</th><th>Mean</th><th>95% CI</th><th>Pass rate</th><th>Answered</th></tr>{grader_rows}</table></div>
 <h2>By tag ({escape(s['primary_grader'])})</h2><div class="table-wrap"><table><tr><th>Tag</th><th>Cases</th><th></th><th>Mean</th></tr>{tag_rows}</table></div>
+{source_html}
 <h2>Cases</h2>
 <div class="controls"><input id="q" type="search" placeholder="Filter by case id or tag">
 <label class="sub"><input id="failing" type="checkbox"> only imperfect cases</label></div>
@@ -227,6 +256,7 @@ def console_summary(s: dict[str, Any]) -> str:
     lines += [
         f"  status             {', '.join(f'{k}={v}' for k, v in sorted(c['status'].items()))}",
         f"  unresolved errors  {sum(c['unresolved_errors'].values())} {c['unresolved_errors'] or ''}".rstrip(),
+        *([f"  excluded           {len(s['excluded'])} case(s) with known problems (known_issues.toml)"] if s.get("excluded") else []),
         f"  cost               model {_usd(s['cost']['model_usd'])}, judge {_usd(s['cost']['judge_usd'])}",
         f"  latency            p50 {_secs(s['latency_s']['p50'])}, p95 {_secs(s['latency_s']['p95'])}",
     ]

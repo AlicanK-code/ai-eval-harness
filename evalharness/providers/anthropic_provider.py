@@ -38,9 +38,12 @@ class AnthropicProvider:
 
         # Deliberately no server-side refusal fallback: a fallback would silently swap the
         # model under test. Refusals are recorded as their own outcome instead.
+        # Streamed so long reasoning on hard questions can't hit an HTTP timeout; we only
+        # need the final message, not the individual events.
         start = time.perf_counter()
         try:
-            response = self.client.with_options(timeout=request.timeout_s).messages.create(**kwargs)
+            with self.client.with_options(timeout=request.timeout_s).messages.stream(**kwargs) as stream:
+                response = stream.get_final_message()
         except anthropic.APITimeoutError as e:
             raise ProviderError("timeout", str(e), retryable=True) from e
         except anthropic.RateLimitError as e:
@@ -48,7 +51,8 @@ class AnthropicProvider:
         except (anthropic.AuthenticationError, anthropic.PermissionDeniedError) as e:
             raise ProviderError("auth", e.message, retryable=False) from e
         except anthropic.BadRequestError as e:
-            raise ProviderError("bad_request", e.message, retryable=False) from e
+            kind = "billing" if "credit balance" in e.message.lower() else "bad_request"
+            raise ProviderError(kind, e.message, retryable=False) from e
         except anthropic.NotFoundError as e:
             raise ProviderError("not_found", e.message, retryable=False) from e
         except anthropic.APIStatusError as e:
